@@ -6,6 +6,8 @@
  * All input parsing is strictly case-insensitive.
  * Includes Dynamic Scaling Grids with auto-truncating viewports & coordinate axes.
  * Command Line Arguments: --easy, --medium, --hard, --impossible, --kobayashi-maru=256x256
+ * 
+ * Encoding: 100% Pure 7-bit ASCII. No UTF-8.
  */
 
 #include <stdio.h>
@@ -22,23 +24,23 @@
 #endif
 #endif
 
-// Macro to mimic GW-BASIC's INT() which truncates toward negative infinity
+/* Macro to mimic GW-BASIC's INT() which truncates toward negative infinity */
 #define B_INT(x) ((int)floor(x))
 #define MAX_GRID 257       
 #define MAX_K_PER_QUAD 128 
 
-// --- ANSI COLOR MACROS ---
-#define ANSI_COLOR_RED     "\x1b[91m" 
-#define ANSI_COLOR_GREEN   "\x1b[92m" 
-#define ANSI_COLOR_YELLOW  "\x1b[93m" 
-#define ANSI_COLOR_BLUE    "\x1b[94m" 
-#define ANSI_COLOR_CYAN    "\x1b[96m" 
-#define ANSI_COLOR_WHITE   "\x1b[97m" 
-#define ANSI_COLOR_RESET   "\x1b[0m"
+/* --- ANSI COLOR MACROS (Using pure ASCII Octal \033) --- */
+#define ANSI_COLOR_RED     "\033[91m" 
+#define ANSI_COLOR_GREEN   "\033[92m" 
+#define ANSI_COLOR_YELLOW  "\033[93m" 
+#define ANSI_COLOR_BLUE    "\033[94m" 
+#define ANSI_COLOR_CYAN    "\033[96m" 
+#define ANSI_COLOR_WHITE   "\033[97m" 
+#define ANSI_COLOR_RESET   "\033[0m"
 
-// ==============================================================================
-// --- GLOBAL GAME STATE ---
-// ==============================================================================
+/* ============================================================================== */
+/* --- GLOBAL GAME STATE ---                                                      */
+/* ============================================================================== */
 
 int ARG_GRID_SIZE = 8;
 int IS_KOBAYASHI = 0;
@@ -46,7 +48,7 @@ int IS_KOBAYASHI = 0;
 int S_GRID;          
 double S_SCALE;      
 
-// --- GRIDS, VECTORS & MAPS ---
+/* --- GRIDS, VECTORS & MAPS --- */
 int G[MAX_GRID][MAX_GRID];         
 int Z[MAX_GRID][MAX_GRID];         
 char Q[MAX_GRID][MAX_GRID][4];     
@@ -54,7 +56,7 @@ double C[10][3];
 double K[MAX_K_PER_QUAD][5];       
 double D[9];                       
 
-// --- U.S.S. ENTERPRISE (STATUS & RESOURCES) ---
+/* --- U.S.S. ENTERPRISE (STATUS & RESOURCES) --- */
 int Q1, Q2;          
 double S1, S2;       
 double E, E0;        
@@ -62,23 +64,23 @@ double S, S9;
 double P, P0;        
 int D0;              
 
-// --- MISSION & TIME PARAMETERS ---
+/* --- MISSION & TIME PARAMETERS --- */
 double T, T0, T9;    
 int K9, K7;          
 int B9;              
 
-// --- LOCAL QUADRANT ENVIRONMENT ---
+/* --- LOCAL QUADRANT ENVIRONMENT --- */
 int K3, B3, S3;      
 int B4, B5;          
 double D4;           
 
-// --- END-GAME FLAGS ---
+/* --- END-GAME FLAGS --- */
 int destroyed = 0;   
 int stranded = 0;    
 int relieved = 0;    
-// ==============================================================================
+/* ============================================================================== */
 
-// --- UTILITY FUNCTIONS ---
+/* --- UTILITY FUNCTIONS --- */
 
 void enable_ansi() {
 #ifdef _WIN32
@@ -123,13 +125,15 @@ void get_window_bounds(int pos, int max_size, int *start, int *end) {
 }
 
 int get_input_str(char* buf, int size) {
+    char *start;
+    int len;
     if (!fgets(buf, size, stdin)) return 0;
     buf[strcspn(buf, "\r\n")] = '\0'; 
-    char *start = buf;
+    start = buf;
     while(*start && isspace((unsigned char)*start)) start++;
     if (start != buf) memmove(buf, start, strlen(start) + 1);
     
-    int len = strlen(buf);
+    len = strlen(buf);
     while(len > 0 && isspace((unsigned char)buf[len - 1])) {
         buf[len - 1] = '\0'; len--;
     }
@@ -158,14 +162,16 @@ const char* device_name(int r) {
 void print_quadrant_name(int q1, int q2, int region_only) {
     int mapped_q1 = 1 + ((q1 - 1) * 8 / S_GRID);
     int mapped_q2 = 1 + ((q2 - 1) * 8 / S_GRID);
+    const char* names1[] = { "", "ANTARES", "RIGEL", "PROCYON", "VEGA", "CANOPUS", "ALTAIR", "SAGITTARIUS", "POLLUX" };
+    const char* names2[] = { "", "SIRIUS", "DENEB", "CAPELLA", "BETELGEUSE", "ALDEBARAN", "REGULUS", "ARCTURUS", "SPICA" };
+    const char* region;
+    
     if (mapped_q1 > 8) mapped_q1 = 8;
     if (mapped_q2 > 8) mapped_q2 = 8;
     if (mapped_q1 < 1) mapped_q1 = 1;
     if (mapped_q2 < 1) mapped_q2 = 1;
     
-    const char* names1[] = { "", "ANTARES", "RIGEL", "PROCYON", "VEGA", "CANOPUS", "ALTAIR", "SAGITTARIUS", "POLLUX" };
-    const char* names2[] = { "", "SIRIUS", "DENEB", "CAPELLA", "BETELGEUSE", "ALDEBARAN", "REGULUS", "ARCTURUS", "SPICA" };
-    const char* region = (mapped_q2 <= 4) ? names1[mapped_q1] : names2[mapped_q1];
+    region = (mapped_q2 <= 4) ? names1[mapped_q1] : names2[mapped_q1];
     
     printf("%s", region);
     if (!region_only) {
@@ -174,7 +180,6 @@ void print_quadrant_name(int q1, int q2, int region_only) {
     }
 }
 
-// Translates the physical strings to their dynamic color representations
 void print_cell(const char* cell) {
     if (strcmp(cell, "<*>") == 0) {
         printf("%s<*>%s", ANSI_COLOR_WHITE, ANSI_COLOR_CYAN);
@@ -191,13 +196,13 @@ void print_cell(const char* cell) {
     }
 }
 
-// --- FORWARD DECLARATIONS ---
+/* --- FORWARD DECLARATIONS --- */
 void short_range_scan();
 void klingons_shoot();
 void cmd_dam();
 void help();
 
-// --- CORE MECHANICS ---
+/* --- CORE MECHANICS --- */
 
 void enter_quadrant() {
     Z[Q1][Q2] = G[Q1][Q2];
@@ -226,10 +231,9 @@ void enter_quadrant() {
     
     strcpy(Q[(int)S1][(int)S2], "<*>");
     
-    // Position Klingons & Assign AI (50/50 Guard vs Chase)
     for (int i = 1; i <= K3; i++) {
-        if (i >= MAX_K_PER_QUAD) break;
         int r1, r2;
+        if (i >= MAX_K_PER_QUAD) break;
         do { r1 = FNR(); r2 = FNR(); } while (strcmp(Q[r1][r2], "   ") != 0);
         strcpy(Q[r1][r2], "+K+");
         K[i][1] = r1; K[i][2] = r2;
@@ -249,7 +253,6 @@ void enter_quadrant() {
         int r1, r2;
         do { r1 = FNR(); r2 = FNR(); } while (strcmp(Q[r1][r2], "   ") != 0);
         
-        // 25% chance of planetary generation
         if (rand() % 4 == 0) {
             strcpy(Q[r1][r2], " @ ");
         } else {
@@ -262,6 +265,9 @@ void enter_quadrant() {
 }
 
 void setup_game() {
+    double scale_t9, scale_k9, scale_active, random_orig_time;
+    int orig_K9, max_active, k_placed, r_param, b_placed;
+
     S_GRID = ARG_GRID_SIZE;
     S_SCALE = S_GRID / 8.0;
 
@@ -274,15 +280,15 @@ void setup_game() {
 
     T = B_INT(RND(1) * 20.0 + 20.0) * 100.0; T0 = T;
 
-    double scale_t9 = S_SCALE;
-    double scale_k9 = S_SCALE;
-    double scale_active = (S_GRID == 8) ? 0.5 : (S_GRID / 16.0);
+    scale_t9 = S_SCALE;
+    scale_k9 = S_SCALE;
+    scale_active = (S_GRID == 8) ? 0.5 : (S_GRID / 16.0);
     if (S_GRID <= 4) scale_active = 0.25;
 
-    double random_orig_time = 25.0 + B_INT(RND(1) * 10.0);
+    random_orig_time = 25.0 + B_INT(RND(1) * 10.0);
     T9 = random_orig_time * scale_t9;
 
-    int orig_K9 = 0;
+    orig_K9 = 0;
     for (int i = 1; i <= 8; i++) {
         for (int j = 1; j <= 8; j++) {
             double r1 = RND(1);
@@ -296,11 +302,11 @@ void setup_game() {
     if (K9 > T9) T9 = K9 + 1; 
     K7 = K9;
     
-    int max_active = (int)ceil(3.0 * scale_active);
+    max_active = (int)ceil(3.0 * scale_active);
     if (max_active < 1) max_active = 1;
     if (max_active > MAX_K_PER_QUAD - 1) max_active = MAX_K_PER_QUAD - 1;
     
-    int k_placed = 0;
+    k_placed = 0;
     while (k_placed < K9) {
         int qx = FNR(), qy = FNR();
         int clump = (rand() % max_active) + 1;
@@ -312,14 +318,14 @@ void setup_game() {
         }
     }
     
-    int r_param = S_GRID / 4;
+    r_param = S_GRID / 4;
     if (r_param < 1) r_param = 1; 
     
     B9 = ((rand() % r_param) + 1) * r_param; 
     if (B9 > K9 / 5) B9 = K9 / 5; 
     if (B9 < 1) B9 = 1;           
 
-    int b_placed = 0;
+    b_placed = 0;
     while (b_placed < B9) {
         int qx = FNR(), qy = FNR();
         if (((G[qx][qy] / 10) % 10) == 0) { 
@@ -362,11 +368,12 @@ void setup_game() {
     printf("  %s%d%s STARBASE%s IN THE GALAXY FOR RESUPPLYING YOUR SHIP\n\n", ANSI_COLOR_BLUE, B9, ANSI_COLOR_CYAN, (B9 != 1 ? "S" : ""));
 }
 
-// --- SHIP COMMANDS ---
+/* --- SHIP COMMANDS --- */
 
 void short_range_scan() {
     const char* C_str = "GREEN";
     const char* cond_color = ANSI_COLOR_GREEN;
+    int start_x, end_x, start_y, end_y, display_rows;
 
     if (E < E0 * 0.1) {
         C_str = "YELLOW";
@@ -395,11 +402,10 @@ void short_range_scan() {
     }
     if (D[2] < 0) { printf("\n%s*** SHORT RANGE SENSORS ARE OUT ***%s\n\n", ANSI_COLOR_RED, ANSI_COLOR_CYAN); return; }
     
-    int start_x, end_x, start_y, end_y;
     get_window_bounds(B_INT(S1), S_GRID, &start_x, &end_x);
     get_window_bounds(B_INT(S2), S_GRID, &start_y, &end_y);
 
-    int display_rows = (end_x - start_x + 1);
+    display_rows = (end_x - start_x + 1);
     if (display_rows < 9) display_rows = 9;
 
     printf("\n    ");
@@ -469,7 +475,10 @@ void short_range_scan() {
 }
 
 void cmd_nav() {
-    double C1_in;
+    double C1_in, W1, normalized_energy_cost, D6, X1, X2, x, y, S1_orig, S2_orig;
+    int N_steps, D1, C1_int, q4, q5;
+    char X_str[8] = "8";
+
     printf("COURSE (0-9)? "); 
     if (!get_input_double(&C1_in)) return;
     if (C1_in == 9.0) C1_in = 1.0;
@@ -477,10 +486,8 @@ void cmd_nav() {
         printf("   LT. SULU REPORTS, 'INCORRECT COURSE DATA, SIR!'\n"); return;
     }
     
-    char X_str[8] = "8";
     if (D[1] < 0) strcpy(X_str, "0.2");
     
-    double W1;
     printf("WARP FACTOR (0-%s)? ", X_str); 
     if (!get_input_double(&W1)) return;
     
@@ -490,8 +497,8 @@ void cmd_nav() {
         printf("   CHIEF ENGINEER SCOTT REPORTS 'THE ENGINES WON'T TAKE WARP %.1f!'\n", W1); return;
     }
     
-    int N_steps = B_INT(W1 * S_GRID + 0.5);
-    double normalized_energy_cost = (N_steps * 8.0) / S_GRID + 10.0;
+    N_steps = B_INT(W1 * S_GRID + 0.5);
+    normalized_energy_cost = (N_steps * 8.0) / S_GRID + 10.0;
     
     if (E - normalized_energy_cost < 0) {
         printf("ENGINEERING REPORTS   'INSUFFICIENT ENERGY AVAILABLE\n");
@@ -503,15 +510,16 @@ void cmd_nav() {
     }
     
     for (int i = 1; i < MAX_K_PER_QUAD; i++) {
+        int r1, r2, dx, dy;
         if (K[i][3] <= 0) continue;
         
-        int r1 = K[i][1];
-        int r2 = K[i][2];
+        r1 = K[i][1];
+        r2 = K[i][2];
         strcpy(Q[r1][r2], "   ");
         
         if (K[i][4] == 1) { 
-            int dx = (S1 > r1) ? 1 : ((S1 < r1) ? -1 : 0);
-            int dy = (S2 > r2) ? 1 : ((S2 < r2) ? -1 : 0);
+            dx = (S1 > r1) ? 1 : ((S1 < r1) ? -1 : 0);
+            dy = (S2 > r2) ? 1 : ((S2 < r2) ? -1 : 0);
             
             if (dx != 0 || dy != 0) {
                 if (r1+dx >= 1 && r1+dx <= S_GRID && r2+dy >= 1 && r2+dy <= S_GRID && strcmp(Q[r1+dx][r2+dy], "   ") == 0) {
@@ -532,8 +540,8 @@ void cmd_nav() {
     klingons_shoot();
     if (S < 0) return; 
     
-    int D1 = 0;
-    double D6 = (W1 >= 1.0) ? 1.0 : W1;
+    D1 = 0;
+    D6 = (W1 >= 1.0) ? 1.0 : W1;
     for (int i = 1; i <= 8; i++) {
         if (D[i] < 0) {
             D[i] += D6;
@@ -557,27 +565,30 @@ void cmd_nav() {
     }
     
     strcpy(Q[(int)S1][(int)S2], "   ");
-    int C1_int = B_INT(C1_in);
-    double X1 = C[C1_int][1] + (C[C1_int+1][1] - C[C1_int][1]) * (C1_in - C1_int);
-    double X2 = C[C1_int][2] + (C[C1_int+1][2] - C[C1_int][2]) * (C1_in - C1_int);
-    double x = S1, y = S2;
-    int q4 = Q1, q5 = Q2;
-    double S1_orig = S1, S2_orig = S2;
+    C1_int = B_INT(C1_in);
+    X1 = C[C1_int][1] + (C[C1_int+1][1] - C[C1_int][1]) * (C1_in - C1_int);
+    X2 = C[C1_int][2] + (C[C1_int+1][2] - C[C1_int][2]) * (C1_in - C1_int);
+    x = S1; y = S2;
+    q4 = Q1; q5 = Q2;
+    S1_orig = S1; S2_orig = S2;
     
     for (int i = 1; i <= N_steps; i++) {
+        double final_x, final_y;
+        int next_q1, next_q2, x5;
+        
         x += X1; y += X2;
         if (x < 1.0 || x >= S_GRID + 1.0 || y < 1.0 || y >= S_GRID + 1.0) {
-            double final_x = S_GRID * (q4 - 1) + S1_orig + N_steps * X1;
-            double final_y = S_GRID * (q5 - 1) + S2_orig + N_steps * X2;
-            int next_q1 = B_INT(final_x / (double)S_GRID) + 1; 
-            int next_q2 = B_INT(final_y / (double)S_GRID) + 1;
+            final_x = S_GRID * (q4 - 1) + S1_orig + N_steps * X1;
+            final_y = S_GRID * (q5 - 1) + S2_orig + N_steps * X2;
+            next_q1 = B_INT(final_x / (double)S_GRID) + 1; 
+            next_q2 = B_INT(final_y / (double)S_GRID) + 1;
             
             S1 = B_INT(final_x - (next_q1 - 1) * S_GRID); 
             S2 = B_INT(final_y - (next_q2 - 1) * S_GRID);
             if (S1 <= 0) { next_q1--; S1 += S_GRID; }
             if (S2 <= 0) { next_q2--; S2 += S_GRID; }
             
-            int x5 = 0;
+            x5 = 0;
             if (next_q1 < 1) { x5 = 1; next_q1 = 1; S1 = 1; }
             if (next_q1 > S_GRID) { x5 = 1; next_q1 = S_GRID; S1 = S_GRID; }
             if (next_q2 < 1) { x5 = 1; next_q2 = 1; S2 = 1; }
@@ -613,9 +624,9 @@ void cmd_nav() {
 place_enterprise:
     S1 = B_INT(x); S2 = B_INT(y);
     strcpy(Q[(int)S1][(int)S2], "<*>");
-    double T8 = 1.0;
-    if (W1 < 1.0) T8 = 0.1 * B_INT(10.0 * W1);
-    T += T8;
+    
+    if (W1 < 1.0) T += 0.1 * B_INT(10.0 * W1);
+    else T += 1.0;
     
     E -= normalized_energy_cost;
     if (E < 0) {
@@ -631,8 +642,10 @@ void klingons_shoot() {
     if (K3 <= 0) return;
     if (D0 != 0) { printf("%sSTARBASE SHIELDS PROTECT THE ENTERPRISE%s\n", ANSI_COLOR_BLUE, ANSI_COLOR_CYAN); return; }
     for (int i = 1; i < MAX_K_PER_QUAD; i++) {
+        double H;
+        int r1;
         if (K[i][3] <= 0) continue;
-        double H = B_INT((K[i][3] / FND(i)) * (2.0 + RND(1)));
+        H = B_INT((K[i][3] / FND(i)) * (2.0 + RND(1)));
         
         if (IS_KOBAYASHI) H *= (RND(1) * 3.0 + 1.0); 
         
@@ -642,20 +655,20 @@ void klingons_shoot() {
         printf("      <SHIELDS DOWN TO %d UNITS>\n", (int)S);
         
         if (H < 20 || RND(1) > 0.6 || H / S <= 0.02) continue;
-        int r1 = (rand() % 8) + 1;
+        r1 = (rand() % 8) + 1;
         D[r1] -= (H / S + 0.5 * RND(1));
-        printf("DAMAGE CONTROL REPORTS %s DAMAGED BY THE HIT'\n", device_name(r1));
+        printf("DAMAGE CONTROL REPORTS %s DAMAGED BY THE HIT\n", device_name(r1));
     }
 }
 
 void cmd_pha() {
+    double X, H1;
     if (D[4] < 0) { printf("PHASERS INOPERATIVE\n"); return; }
     if (K3 <= 0) {
         printf("SCIENCE OFFICER SPOCK REPORTS  'SENSORS SHOW NO ENEMY SHIPS\n                                IN THIS QUADRANT'\n"); return;
     }
     if (D[8] < 0) printf("COMPUTER FAILURE HAMPERS ACCURACY\n");
     printf("PHASERS LOCKED ON TARGET;  ENERGY AVAILABLE = %d UNITS\n", (int)E);
-    double X;
     while(1) {
         printf("NUMBER OF UNITS TO FIRE? "); 
         if(!get_input_double(&X)) return;
@@ -665,10 +678,11 @@ void cmd_pha() {
     E -= X;
     if (D[7] < 0) X = X * RND(1);
     
-    double H1 = B_INT(X / K3);
+    H1 = B_INT(X / K3);
     for (int i = 1; i < MAX_K_PER_QUAD; i++) {
+        double H;
         if (K[i][3] <= 0) continue;
-        double H = B_INT((H1 / FND(i)) * (RND(1) + 2.0));
+        H = B_INT((H1 / FND(i)) * (RND(1) + 2.0));
         if (H <= 0.15 * K[i][3]) {
             printf("SENSORS SHOW NO DAMAGE TO ENEMY AT %d , %d\n", (int)K[i][1], (int)K[i][2]); continue;
         }
@@ -687,24 +701,27 @@ void cmd_pha() {
 }
 
 void cmd_tor() {
+    double C1_in, X1, X2, x, y;
+    int C1_int;
     if (P <= 0) { printf("ALL PHOTON TORPEDOES EXPENDED\n"); return; }
     if (D[5] < 0) { printf("PHOTON TUBES ARE NOT OPERATIONAL\n"); return; }
     
-    double C1_in; printf("PHOTON TORPEDO COURSE (1-9)? ");
+    printf("PHOTON TORPEDO COURSE (1-9)? ");
     if(!get_input_double(&C1_in)) return;
     if (C1_in == 9.0) C1_in = 1.0;
     if (C1_in < 1.0 || C1_in >= 9.0) { printf("ENSIGN CHEKOV REPORTS,  'INCORRECT COURSE DATA, SIR!'\n"); return; }
     
-    int C1_int = B_INT(C1_in);
-    double X1 = C[C1_int][1] + (C[C1_int+1][1] - C[C1_int][1]) * (C1_in - C1_int);
-    double X2 = C[C1_int][2] + (C[C1_int+1][2] - C[C1_int][2]) * (C1_in - C1_int);
+    C1_int = B_INT(C1_in);
+    X1 = C[C1_int][1] + (C[C1_int+1][1] - C[C1_int][1]) * (C1_in - C1_int);
+    X2 = C[C1_int][2] + (C[C1_int+1][2] - C[C1_int][2]) * (C1_in - C1_int);
     
     E -= 2; P -= 1;
-    double x = S1, y = S2;
+    x = S1; y = S2;
     printf("TORPEDO TRACK:\n");
     while(1) {
+        int x3, y3;
         x += X1; y += X2;
-        int x3 = B_INT(x + 0.5); int y3 = B_INT(y + 0.5);
+        x3 = B_INT(x + 0.5); y3 = B_INT(y + 0.5);
         if (x3 < 1 || x3 > S_GRID || y3 < 1 || y3 > S_GRID) { printf("TORPEDO MISSED\n"); break; }
         printf("               %d , %d\n", x3, y3);
         if (strcmp(Q[x3][y3], "   ") != 0) {
@@ -740,9 +757,10 @@ void cmd_tor() {
 }
 
 void cmd_she() {
+    double X; 
     if (D[7] < 0) { printf("SHIELD CONTROL INOPERABLE\n"); return; }
     printf("ENERGY AVAILABLE = %d\n", (int)(E + S));
-    double X; printf("NUMBER OF UNITS TO SHIELDS? "); 
+    printf("NUMBER OF UNITS TO SHIELDS? "); 
     if(!get_input_double(&X)) return;
     if (X < 0 || S == X) { printf("<SHIELDS UNCHANGED>\n"); return; }
     if (X > E + S) {
@@ -753,6 +771,8 @@ void cmd_she() {
 }
 
 void cmd_dam() {
+    double D3 = 0;
+    char A[16]; 
     if (D[6] < 0) {
         printf("DAMAGE CONTROL REPORT NOT AVAILABLE\n");
         if (D0 == 0) return;
@@ -769,7 +789,6 @@ void cmd_dam() {
         if (D0 == 0) return;
     }
     
-    double D3 = 0;
     for (int i = 1; i <= 8; i++) {
         if (D[i] < 0) D3 += 0.1;
     }
@@ -780,7 +799,6 @@ void cmd_dam() {
     printf("ESTIMATED TIME TO REPAIR: %.2f STARDATES\n", 0.01 * B_INT(100.0 * D3));
     printf("WILL YOU AUTHORIZE THE REPAIR ORDER (Y/N)? ");
     
-    char A[16]; 
     if (!get_input_str(A, sizeof(A))) return;
     if (A[0] == 'Y') {
         for (int i = 1; i <= 8; i++) {
@@ -830,23 +848,69 @@ L8460:
     printf("DISTANCE = %.2f\n", sqrt(x*x + a*a));
 }
 
+void print_com_help() {
+    printf("\\COM\\ = LIBRARY-COMPUTER\n");
+    printf("     THE LIBRARY-COMPUTER CONTAINS SIX OPTIONS:\n");
+    printf("     OPTION 0 = CUMULATIVE GALACTIC RECORD\n");
+    printf("        THIS OPTION SHOWS COMPUTER MEMORY OF THE RESULTS OF ALL\n");
+    printf("        PREVIOUS SHORT AND LONG RANGE SENSOR SCANS\n");
+    printf("     OPTION 1 = STATUS REPORT\n");
+    printf("        THIS OPTION SHOWS THE NUMBER OF KLINGONS, STARDATES,\n");
+    printf("        AND STARBASES REMAINING IN THE GAME.\n");
+    printf("     OPTION 2 = PHOTON TORPEDO DATA\n");
+    printf("        WHICH GIVES DIRECTIONS AND DISTANCE FROM THE ENTERPRISE\n");
+    printf("        TO ALL KLINGONS IN YOUR QUADRANT\n");
+    printf("     OPTION 3 = STARBASE NAV DATA\n");
+    printf("        THIS OPTION GIVES DIRECTION AND DISTANCE TO ANY \n");
+    printf("        STARBASE WITHIN YOUR QUADRANT\n");
+    printf("     OPTION 4 = DIRECTION/DISTANCE CALCULATOR\n");
+    printf("        THIS OPTION ALLOWS YOU TO ENTER COORDINATES FOR\n");
+    printf("        DIRECTION/DISTANCE CALCULATIONS\n");
+    printf("     OPTION 5 = GALACTIC /REGION NAME/ MAP\n");
+    printf("        THIS OPTION PRINTS THE NAMES OF THE SIXTEEN MAJOR \n");
+    printf("        GALACTIC REGIONS REFERRED TO IN THE GAME.\n\n");
+}
+
 void cmd_com() {
     if (D[8] < 0) { 
-        printf("COMPUTER DISABLED\n"); 
+        printf("%sCOMPUTER DISABLED%s\n", ANSI_COLOR_RED, ANSI_COLOR_CYAN); 
         return; 
     }
     
     while (1) {
-        double cmd; 
-        printf("COMPUTER ACTIVE AND AWAITING COMMAND? "); 
-        if(!get_input_double(&cmd)) return;
+        char buf[256];
+        int cmd = -1;
         
-        if (cmd < 0) { return; }
+        printf("COMPUTER ACTIVE AND AWAITING COMMAND? "); 
+        if(!get_input_str(buf, sizeof(buf))) return;
+        
+        if (strlen(buf) == 0) { 
+            return; 
+        }
+        
+        if (buf[0] == '?') {
+            printf("\n");
+            print_com_help();
+            continue;
+        }
+        
+        if (sscanf(buf, "%d", &cmd) != 1) {
+            printf("\n");
+            print_com_help();
+            continue;
+        }
+        
+        if (cmd < 0 || cmd > 5) {
+            printf("\n");
+            print_com_help();
+            continue;
+        }
+        
         printf("\n");
         
-        switch ((int)cmd) {
+        switch (cmd) {
             case 0: {
-                int start_x, end_x, start_y, end_y;
+                int start_x, end_x, start_y, end_y, cols;
                 get_window_bounds(Q1, S_GRID, &start_x, &end_x);
                 get_window_bounds(Q2, S_GRID, &start_y, &end_y);
 
@@ -857,7 +921,7 @@ void cmd_com() {
                 }
                 printf("\n     ");
                 
-                int cols = end_y - start_y + 1;
+                cols = end_y - start_y + 1;
                 if (cols < 1) cols = 1;
                 
                 for (int d = 0; d < cols * 4 + 2; d++) putchar('-');
@@ -908,29 +972,29 @@ void cmd_com() {
                 }
                 return;
             case 4: {
+                char in_buf[256], *comma;
+                double c1=0, a=0, w1=0, x=0; 
+                
                 printf("DIRECTION/DISTANCE CALCULATOR:\nYOU ARE AT QUADRANT %d,%d SECTOR %d,%d\nPLEASE ENTER\n", Q1, Q2, (int)S1, (int)S2);
-                char buf[256];
                 
                 printf("  INITIAL COORDINATES (X,Y)? "); 
-                if(!get_input_str(buf, sizeof(buf))) return;
-                double c1=0, a=0; 
-                char* comma = strchr(buf, ',');
+                if(!get_input_str(in_buf, sizeof(in_buf))) return;
+                comma = strchr(in_buf, ',');
                 if (comma) { 
                     *comma = ' '; 
-                    sscanf(buf, "%lf %lf", &c1, &a); 
+                    sscanf(in_buf, "%lf %lf", &c1, &a); 
                 } else { 
-                    sscanf(buf, "%lf", &c1); 
+                    sscanf(in_buf, "%lf", &c1); 
                 }
                 
                 printf("  FINAL COORDINATES (X,Y)? "); 
-                if(!get_input_str(buf, sizeof(buf))) return;
-                double w1=0, x=0; 
-                comma = strchr(buf, ',');
+                if(!get_input_str(in_buf, sizeof(in_buf))) return;
+                comma = strchr(in_buf, ',');
                 if (comma) { 
                     *comma = ' '; 
-                    sscanf(buf, "%lf %lf", &w1, &x); 
+                    sscanf(in_buf, "%lf %lf", &w1, &x); 
                 } else { 
-                    sscanf(buf, "%lf", &w1); 
+                    sscanf(in_buf, "%lf", &w1); 
                 }
                 
                 calc_dir_dist(c1, a, w1, x); 
@@ -942,50 +1006,41 @@ void cmd_com() {
 
                 printf("               GALAXY MAP PROJECTIONS (VIEWPORT)\n");
                 for (int i = start_x; i <= end_x; i++) {
-                    printf(" %2d ", i);
-                    
-                    int mapped_qx = 1 + ((i - 1) * 8 / S_GRID);
-                    if (mapped_qx > 8) mapped_qx = 8;
-                    if (mapped_qx < 1) mapped_qx = 1;
-                    
+                    int mapped_qx, j0_1, j0_2, col;
                     char g2_1[32] = {0}, g2_2[32] = {0};
                     const char* names1[] = { "", "ANTARES", "RIGEL", "PROCYON", "VEGA", "CANOPUS", "ALTAIR", "SAGITTARIUS", "POLLUX" };
                     const char* names2[] = { "", "SIRIUS", "DENEB", "CAPELLA", "BETELGEUSE", "ALDEBARAN", "REGULUS", "ARCTURUS", "SPICA" };
+                    
+                    printf(" %2d ", i);
+                    
+                    mapped_qx = 1 + ((i - 1) * 8 / S_GRID);
+                    if (mapped_qx > 8) mapped_qx = 8;
+                    if (mapped_qx < 1) mapped_qx = 1;
+                    
                     strcpy(g2_1, names1[mapped_qx]); 
                     strcpy(g2_2, names2[mapped_qx]);
 
-                    int j0_1 = B_INT(15 - 0.5 * strlen(g2_1)); 
-                    int j0_2 = B_INT(39 - 0.5 * strlen(g2_2));
-                    int col = 3;
-                    while(col < j0_1) { 
-                        printf(" "); 
-                        col++; 
-                    } 
-                    printf("%s", g2_1); 
-                    col += strlen(g2_1);
-                    while(col < j0_2) { 
-                        printf(" "); 
-                        col++; 
-                    } 
+                    j0_1 = B_INT(15 - 0.5 * strlen(g2_1)); 
+                    j0_2 = B_INT(39 - 0.5 * strlen(g2_2));
+                    col = 3;
+                    while(col < j0_1) { printf(" "); col++; } 
+                    printf("%s", g2_1); col += strlen(g2_1);
+                    while(col < j0_2) { printf(" "); col++; } 
                     printf("%s\n", g2_2);
                 }
                 return;
             }
-            default:
-                printf("FUNCTIONS AVAILABLE FROM LIBRARY-COMPUTER:\n");
-                printf("   0 = CUMULATIVE GALACTIC RECORD\n   1 = STATUS REPORT\n   2 = PHOTON TORPEDO DATA\n");
-                printf("   3 = STARBASE NAV DATA\n   4 = DIRECTION/DISTANCE CALCULATOR\n   5 = GALAXY 'REGION NAME' MAP\n\n");
         }
     }
 }
 
 void cmd_lrs() {
+    int start_x, end_x, start_y, end_y, cols;
     if (D[3] < 0) { 
         printf("%sLONG RANGE SENSORS ARE INOPERABLE%s\n", ANSI_COLOR_RED, ANSI_COLOR_CYAN); 
         return; 
     }
     
-    // Updates internal Z-Map directly adjacent to Enterprise
     for (int i = Q1 - 1; i <= Q1 + 1; i++) {
         for (int j = Q2 - 1; j <= Q2 + 1; j++) {
             if (i >= 1 && i <= S_GRID && j >= 1 && j <= S_GRID) { 
@@ -994,11 +1049,10 @@ void cmd_lrs() {
         }
     }
 
-    int start_x, end_x, start_y, end_y;
     get_window_bounds(Q1, S_GRID, &start_x, &end_x);
     get_window_bounds(Q2, S_GRID, &start_y, &end_y);
 
-    int cols = end_y - start_y + 1;
+    cols = end_y - start_y + 1;
     if (cols < 1) cols = 1;
 
     printf("\nLONG RANGE SCAN FOR QUADRANT %d , %d (VIEWPORT)\n", Q1, Q2);
@@ -1032,186 +1086,202 @@ void cmd_lrs() {
 }
 
 void print_page(const char** lines, int count) {
+    char buf[256];
+    printf("\n");
     for (int i = 0; i < count; i++) {
         printf("%s\n", lines[i]);
     }
-    for (int i = count; i < 22; i++) {
-        printf("\n");
-    }
-    printf("%s[PRESS ENTER TO CONTINUE]%s", ANSI_COLOR_WHITE, ANSI_COLOR_CYAN);
+    printf("\n%s[PRESS ENTER TO CONTINUE]%s ", ANSI_COLOR_WHITE, ANSI_COLOR_CYAN);
     fflush(stdout);
-    char buf[256];
     get_input_str(buf, sizeof(buf));
 }
 
 void help() {
     char pg1_str1[128];
     char pg1_str2[128];
+    char pg4_str1[128];
+    char pg5_str1[128];
+    
     sprintf(pg1_str1, "     THE GALAXY IS DIVIDED INTO A DYNAMIC %d X %d QUADRANT GRID,", S_GRID, S_GRID);
     sprintf(pg1_str2, "AND EACH QUADRANT IS FURTHER DIVIDED INTO A %d X %d SECTOR GRID.", S_GRID, S_GRID);
-    
-    char pg4_str1[128];
     sprintf(pg4_str1, "     SHOWS YOU A %dX%d VIEWPORT OF YOUR PRESENT QUADRANT.", (S_GRID < 8 ? S_GRID : 8), (S_GRID < 8 ? S_GRID : 8));
-    
-    char pg5_str1[128];
     sprintf(pg5_str1, "     SHOWS CONDITIONS IN SPACE FOR A %dx%d MACRO-GRID AROUND", (S_GRID < 8 ? S_GRID : 8), (S_GRID < 8 ? S_GRID : 8));
 
-    const char* page1[] = {
-        "          *************************************",
-        "          *                                   *",
-        "          *      * * SUPER STAR TREK * *      *",
-        "          *                                   *",
-        "          *************************************",
-        "",
-        "      INSTRUCTIONS FOR 'SUPER STAR TREK'",
-        "",
-        "1. WHEN YOU SEE \\COMMAND ?\\ PRINTED, ENTER ONE OF THE LEGAL",
-        "     COMMANDS (NAV,SRS,LRS,PHA,TOR,SHE,DAM,COM,HELP, OR XXX).",
-        "2. IF YOU SHOULD TYPE IN AN ILLEGAL COMMAND, YOU'LL GET A SHORT",
-        "     LIST OF THE LEGAL COMMANDS PRINTED OUT.",
-        "3. SOME COMMANDS REQUIRE YOU TO ENTER DATA (FOR EXAMPLE, THE",
-        "     'NAV' COMMAND COMES BACK WITH 'COURSE (1-9) ?'.)  IF YOU",
-        "     TYPE IN ILLEGAL DATA (LIKE NEGATIVE NUMBERS), THAT COMMAND",
-        "     WILL BE ABORTED",
-        "",
-        pg1_str1,
-        pg1_str2
-    };
-
-    const char* page2[] = {
-        "     YOU WILL BE ASSIGNED A STARTING POINT SOMEWHERE IN THE",
-        "GALAXY TO BEGIN A TOUR OF DUTY AS COMMANDER OF THE STARSHIP",
-        "\\ENTERPRISE\\; YOUR MISSION: TO SEEK AND DESTROY THE FLEET OF",
-        "KLINGON WARSHIPS WHICH ARE MENACING THE UNITED FEDERATION OF",
-        "PLANETS.",
-        "",
-        "     YOU HAVE THE FOLLOWING COMMANDS AVAILABLE TO YOU AS CAPTAIN",
-        "OF THE STARSHIP ENTERPRISE:"
-    };
-
-    const char* page3[] = {
-        "\\NAV\\ = WARP ENGINE CONTROL --",
-        "     COURSE IS IN A CIRCULAR NUMERICAL      4  3  2",
-        "     VECTOR ARRANGEMENT AS SHOWN             . . .",
-        "     INTEGER AND REAL VALUES MAY BE           ...",
-        "     USED.  (THUS COURSE 1.5 IS HALF-     5 ---*--- 1",
-        "     WAY BETWEEN 1 AND 2                      ...",
-        "                                             . . .",
-        "     VALUES MAY APPROACH 9.0, WHICH         6  7  8",
-        "     ITSELF IS EQUIVALENT TO 1.0         ",
-        "                                            COURSE",
-        "     ONE WARP FACTOR IS THE SIZE OF ",
-        "     ONE QUADRANT. ENERGY CONSUMPTION",
-        "     SCALES HEAVILY WITH GRID SIZE."
-    };
-
-    const char* page4[] = {
-        "\\SRS\\ = SHORT RANGE SENSOR SCAN",
-        pg4_str1,
-        "",
-        "     SYMBOLOGY ON YOUR SENSOR SCREEN IS AS FOLLOWS:",
-        "        <*> = YOUR STARSHIP'S POSITION",
-        "        +K+ = KLINGON BATTLE CRUISER",
-        "        >!< = FEDERATION STARBASE (REFUEL/REPAIR/RE-ARM HERE!)",
-        "         @  = PLANET",
-        "         *  = STAR",
-        "",
-        "     A CONDENSED 'STATUS REPORT' WILL ALSO BE PRESENTED."
-    };
-
-    const char* page5[] = {
-        "\\LRS\\ = LONG RANGE SENSOR SCAN",
-        pg5_str1,
-        "     THE ENTERPRISE (WHICH IS IN THE MIDDLE OF THE SCAN)",
-        "     THE SCAN IS CODED IN THE FORM \\###\\, WHERE THE UNITS DIGIT",
-        "     IS THE NUMBER OF STARS, THE TENS DIGIT IS THE NUMBER OF",
-        "     STARBASES, AND THE HUNDREDS DIGIT IS THE NUMBER OF",
-        "     KLINGONS.",
-        "",
-        "     EXAMPLE - 207 = 2 KLINGONS, NO STARBASES, & 7 STARS/PLANETS."
-    };
-
-    const char* page6[] = {
-        "\\PHA\\ = PHASER CONTROL.",
-        "     ALLOWS YOU TO DESTROY THE KLINGON BATTLE CRUISERS BY ",
-        "     ZAPPING THEM WITH SUITABLY LARGE UNITS OF ENERGY TO",
-        "     DEPLETE THEIR SHIELD POWER.  (REMEMBER, KLINGONS HAVE",
-        "     PHASERS TOO!)"
-    };
-
-    const char* page7[] = {
-        "\\TOR\\ = PHOTON TORPEDO CONTROL",
-        "     TORPEDO COURSE IS THE SAME AS USED IN WARP ENGINE CONTROL",
-        "     IF YOU HIT THE KLINGON VESSEL, HE IS DESTROYED AND",
-        "     CANNOT FIRE BACK AT YOU.  IF YOU MISS, YOU ARE SUBJECT TO",
-        "     HIS PHASER FIRE.  IN EITHER CASE, YOU ARE ALSO SUBJECT TO ",
-        "     THE PHASER FIRE OF ALL OTHER KLINGONS IN THE QUADRANT.",
-        "",
-        "     THE LIBRARY-COMPUTER (\\COM\\) HAS AN OPTION TO ",
-        "     COMPUTE TORPEDO TRAJECTORY FOR YOU (OPTION 2)"
-    };
-
-    const char* page8[] = {
-        "\\SHE\\ = SHIELD CONTROL",
-        "     DEFINES THE NUMBER OF ENERGY UNITS TO BE ASSIGNED TO THE",
-        "     SHIELDS.  ENERGY IS TAKEN FROM TOTAL SHIP'S ENERGY.  NOTE",
-        "     THAT THE STATUS DISPLAY TOTAL ENERGY INCLUDES SHIELD ENERGY"
-    };
-
-    const char* page9[] = {
-        "\\DAM\\ = DAMAGE CONTROL REPORT",
-        "     GIVES THE STATE OF REPAIR OF ALL DEVICES.  WHERE A NEGATIVE",
-        "     'STATE OF REPAIR' SHOWS THAT THE DEVICE IS TEMPORARILY",
-        "     DAMAGED."
-    };
-
-    const char* page10[] = {
-        "\\COM\\ = LIBRARY-COMPUTER",
-        "     THE LIBRARY-COMPUTER CONTAINS SIX OPTIONS:",
-        "     OPTION 0 = CUMULATIVE GALACTIC RECORD",
-        "        THIS OPTION SHOWS COMPUTER MEMORY OF THE RESULTS OF ALL",
-        "        PREVIOUS SHORT AND LONG RANGE SENSOR SCANS",
-        "     OPTION 1 = STATUS REPORT",
-        "        THIS OPTION SHOWS THE NUMBER OF KLINGONS, STARDATES,",
-        "        AND STARBASES REMAINING IN THE GAME.",
-        "     OPTION 2 = PHOTON TORPEDO DATA",
-        "        WHICH GIVES DIRECTIONS AND DISTANCE FROM THE ENTERPRISE",
-        "        TO ALL KLINGONS IN YOUR QUADRANT",
-        "     OPTION 3 = STARBASE NAV DATA",
-        "        THIS OPTION GIVES DIRECTION AND DISTANCE TO ANY ",
-        "        STARBASE WITHIN YOUR QUADRANT",
-        "     OPTION 4 = DIRECTION/DISTANCE CALCULATOR",
-        "        THIS OPTION ALLOWS YOU TO ENTER COORDINATES FOR",
-        "        DIRECTION/DISTANCE CALCULATIONS",
-        "     OPTION 5 = GALACTIC /REGION NAME/ MAP",
-        "        THIS OPTION PRINTS THE NAMES OF THE SIXTEEN MAJOR ",
-        "        GALACTIC REGIONS REFERRED TO IN THE GAME."
-    };
-    
-    const char* page11[] = {
-        "\\HELP\\ = INSTRUCTION MANUAL",
-        "     PRINTS THIS INSTRUCTION MANUAL AND EXPLAINS HOW TO PLAY",
-        "     SUPER STAR TREK."
-    };
-    
-    const char* page12[] = {
-        "\\XXX\\ = RESIGN COMMAND",
-        "     ALLOWS YOU TO ABORT YOUR MISSION AND RESIGN YOUR",
-        "     COMMISSION FROM STARFLEET.",
-        "     STARFLEET WILL RECORD THE REMAINING KLINGON THREAT",
-        "     AND ASSIGN A NEW COMMANDER."
-    };
-
-    print_page(page1, 21); print_page(page2, 8); print_page(page3, 13);
-    print_page(page4, 11); print_page(page5, 9); print_page(page6, 5);
-    print_page(page7, 9); print_page(page8, 4); print_page(page9, 4);
-    print_page(page10, 20); print_page(page11, 3); print_page(page12, 5);
+    {
+        const char* page1[] = {
+            "          *************************************",
+            "          *                                   *",
+            "          *      * * SUPER STAR TREK * *      *",
+            "          *                                   *",
+            "          *************************************",
+            "",
+            "      INSTRUCTIONS FOR 'SUPER STAR TREK'",
+            "",
+            "1. WHEN YOU SEE \\COMMAND ?\\ PRINTED, ENTER ONE OF THE LEGAL",
+            "     COMMANDS (NAV,SRS,LRS,PHA,TOR,SHE,DAM,COM,HELP, OR XXX).",
+            "2. IF YOU SHOULD TYPE IN AN ILLEGAL COMMAND, YOU'LL GET A SHORT",
+            "     LIST OF THE LEGAL COMMANDS PRINTED OUT.",
+            "3. SOME COMMANDS REQUIRE YOU TO ENTER DATA (FOR EXAMPLE, THE",
+            "     'NAV' COMMAND COMES BACK WITH 'COURSE (1-9) ?'.)  IF YOU",
+            "     TYPE IN ILLEGAL DATA (LIKE NEGATIVE NUMBERS), THAT COMMAND",
+            "     WILL BE ABORTED",
+            "",
+            pg1_str1,
+            pg1_str2
+        };
+        print_page(page1, 19);
+    }
+    {
+        const char* page2[] = {
+            "     YOU WILL BE ASSIGNED A STARTING POINT SOMEWHERE IN THE",
+            "GALAXY TO BEGIN A TOUR OF DUTY AS COMMANDER OF THE STARSHIP",
+            "\\ENTERPRISE\\; YOUR MISSION: TO SEEK AND DESTROY THE FLEET OF",
+            "KLINGON WARSHIPS WHICH ARE MENACING THE UNITED FEDERATION OF",
+            "PLANETS.",
+            "",
+            "     YOU HAVE THE FOLLOWING COMMANDS AVAILABLE TO YOU AS CAPTAIN",
+            "OF THE STARSHIP ENTERPRISE:"
+        };
+        print_page(page2, 8);
+    }
+    {
+        const char* page3[] = {
+            "\\NAV\\ = WARP ENGINE CONTROL --",
+            "     COURSE IS IN A CIRCULAR NUMERICAL      4  3  2",
+            "     VECTOR ARRANGEMENT AS SHOWN             . . .",
+            "     INTEGER AND REAL VALUES MAY BE           ...",
+            "     USED.  (THUS COURSE 1.5 IS HALF-     5 ---*--- 1",
+            "     WAY BETWEEN 1 AND 2                      ...",
+            "                                             . . .",
+            "     VALUES MAY APPROACH 9.0, WHICH         6  7  8",
+            "     ITSELF IS EQUIVALENT TO 1.0         ",
+            "                                            COURSE",
+            "     ONE WARP FACTOR IS THE SIZE OF ",
+            "     ONE QUADRANT. ENERGY CONSUMPTION",
+            "     SCALES HEAVILY WITH GRID SIZE."
+        };
+        print_page(page3, 13);
+    }
+    {
+        const char* page4[] = {
+            "\\SRS\\ = SHORT RANGE SENSOR SCAN",
+            pg4_str1,
+            "",
+            "     SYMBOLOGY ON YOUR SENSOR SCREEN IS AS FOLLOWS:",
+            "        <*> = YOUR STARSHIP'S POSITION",
+            "        +K+ = KLINGON BATTLE CRUISER",
+            "        >!< = FEDERATION STARBASE (REFUEL/REPAIR/RE-ARM HERE!)",
+            "         @  = PLANET",
+            "         *  = STAR",
+            "",
+            "     A CONDENSED 'STATUS REPORT' WILL ALSO BE PRESENTED."
+        };
+        print_page(page4, 11);
+    }
+    {
+        const char* page5[] = {
+            "\\LRS\\ = LONG RANGE SENSOR SCAN",
+            pg5_str1,
+            "     THE ENTERPRISE (WHICH IS IN THE MIDDLE OF THE SCAN)",
+            "     THE SCAN IS CODED IN THE FORM \\###\\, WHERE THE UNITS DIGIT",
+            "     IS THE NUMBER OF STARS, THE TENS DIGIT IS THE NUMBER OF",
+            "     STARBASES, AND THE HUNDREDS DIGIT IS THE NUMBER OF",
+            "     KLINGONS.",
+            "",
+            "     EXAMPLE - 207 = 2 KLINGONS, NO STARBASES, & 7 STARS/PLANETS."
+        };
+        print_page(page5, 9);
+    }
+    {
+        const char* page6[] = {
+            "\\PHA\\ = PHASER CONTROL.",
+            "     ALLOWS YOU TO DESTROY THE KLINGON BATTLE CRUISERS BY ",
+            "     ZAPPING THEM WITH SUITABLY LARGE UNITS OF ENERGY TO",
+            "     DEPLETE THEIR SHIELD POWER.  (REMEMBER, KLINGONS HAVE",
+            "     PHASERS TOO!)"
+        };
+        print_page(page6, 5);
+    }
+    {
+        const char* page7[] = {
+            "\\TOR\\ = PHOTON TORPEDO CONTROL",
+            "     TORPEDO COURSE IS THE SAME AS USED IN WARP ENGINE CONTROL",
+            "     IF YOU HIT THE KLINGON VESSEL, HE IS DESTROYED AND",
+            "     CANNOT FIRE BACK AT YOU.  IF YOU MISS, YOU ARE SUBJECT TO",
+            "     HIS PHASER FIRE.  IN EITHER CASE, YOU ARE ALSO SUBJECT TO ",
+            "     THE PHASER FIRE OF ALL OTHER KLINGONS IN THE QUADRANT.",
+            "",
+            "     THE LIBRARY-COMPUTER (\\COM\\) HAS AN OPTION TO ",
+            "     COMPUTE TORPEDO TRAJECTORY FOR YOU (OPTION 2)"
+        };
+        print_page(page7, 9);
+    }
+    {
+        const char* page8[] = {
+            "\\SHE\\ = SHIELD CONTROL",
+            "     DEFINES THE NUMBER OF ENERGY UNITS TO BE ASSIGNED TO THE",
+            "     SHIELDS.  ENERGY IS TAKEN FROM TOTAL SHIP'S ENERGY.  NOTE",
+            "     THAT THE STATUS DISPLAY TOTAL ENERGY INCLUDES SHIELD ENERGY"
+        };
+        print_page(page8, 4);
+    }
+    {
+        const char* page9[] = {
+            "\\DAM\\ = DAMAGE CONTROL REPORT",
+            "     GIVES THE STATE OF REPAIR OF ALL DEVICES.  WHERE A NEGATIVE",
+            "     'STATE OF REPAIR' SHOWS THAT THE DEVICE IS TEMPORARILY",
+            "     DAMAGED."
+        };
+        print_page(page9, 4);
+    }
+    {
+        const char* page10[] = {
+            "\\COM\\ = LIBRARY-COMPUTER",
+            "     THE LIBRARY-COMPUTER CONTAINS SIX OPTIONS:",
+            "     OPTION 0 = CUMULATIVE GALACTIC RECORD",
+            "        THIS OPTION SHOWS COMPUTER MEMORY OF THE RESULTS OF ALL",
+            "        PREVIOUS SHORT AND LONG RANGE SENSOR SCANS",
+            "     OPTION 1 = STATUS REPORT",
+            "        THIS OPTION SHOWS THE NUMBER OF KLINGONS, STARDATES,",
+            "        AND STARBASES REMAINING IN THE GAME.",
+            "     OPTION 2 = PHOTON TORPEDO DATA",
+            "        WHICH GIVES DIRECTIONS AND DISTANCE FROM THE ENTERPRISE",
+            "        TO ALL KLINGONS IN YOUR QUADRANT",
+            "     OPTION 3 = STARBASE NAV DATA",
+            "        THIS OPTION GIVES DIRECTION AND DISTANCE TO ANY ",
+            "        STARBASE WITHIN YOUR QUADRANT",
+            "     OPTION 4 = DIRECTION/DISTANCE CALCULATOR",
+            "        THIS OPTION ALLOWS YOU TO ENTER COORDINATES FOR",
+            "        DIRECTION/DISTANCE CALCULATIONS",
+            "     OPTION 5 = GALACTIC /REGION NAME/ MAP",
+            "        THIS OPTION PRINTS THE NAMES OF THE SIXTEEN MAJOR ",
+            "        GALACTIC REGIONS REFERRED TO IN THE GAME."
+        };
+        print_page(page10, 20);
+    }
+    {
+        const char* page11[] = {
+            "\\HELP\\ = INSTRUCTION MANUAL",
+            "     PRINTS THIS INSTRUCTION MANUAL AND EXPLAINS HOW TO PLAY",
+            "     SUPER STAR TREK."
+        };
+        print_page(page11, 3);
+    }
+    {
+        const char* page12[] = {
+            "\\XXX\\ = RESIGN COMMAND",
+            "     ALLOWS YOU TO ABORT YOUR MISSION AND RESIGN YOUR",
+            "     COMMISSION FROM STARFLEET.",
+            "     STARFLEET WILL RECORD THE REMAINING KLINGON THREAT",
+            "     AND ASSIGN A NEW COMMANDER."
+        };
+        print_page(page12, 5);
+    }
 }
 
 int command_loop() {
     char cmd[256];
     
-    // Command Prompt prints in pure WHITE, resets back to Cyan
     printf("\n%sCOMMAND? %s", ANSI_COLOR_WHITE, ANSI_COLOR_RESET);
     if (!get_input_str(cmd, sizeof(cmd))) return 1;
     
@@ -1236,6 +1306,7 @@ int command_loop() {
 }
 
 void print_game_over(int won, int resigned) {
+    double diff;
     if (resigned || relieved) {
         printf("\n%sTHERE WERE %d KLINGON BATTLE CRUISERS LEFT AT\nTHE END OF YOUR MISSION.%s\n", ANSI_COLOR_WHITE, K9, ANSI_COLOR_CYAN);
     } else if (stranded) {
@@ -1249,7 +1320,7 @@ void print_game_over(int won, int resigned) {
         }
         printf("\n%sCONGRATULATIONS, CAPTAIN!  THE LAST KLINGON BATTLE CRUISER\nMENACING THE FEDERATION HAS BEEN DESTROYED.\n\n", ANSI_COLOR_GREEN);
         
-        double diff = T - T0; 
+        diff = T - T0; 
         if (diff <= 0.0) diff = 0.1;
         
         printf("%sYOUR EFFICIENCY RATING IS %.1f\n", ANSI_COLOR_WHITE, 1000.0 * pow(K7 / diff, 2.0));
@@ -1287,9 +1358,10 @@ int main(int argc, char* argv[]) {
     printf("                    THE USS ENTERPRISE --- NCC-1701%s\n\n\n\n\n\n", ANSI_COLOR_CYAN);
     
     while (1) {
+        int quit = 0;
+        char aye[16];
         setup_game();
         enter_quadrant();
-        int quit = 0;
         
         while (T <= T0 + T9 && K9 > 0 && !quit && !destroyed && !relieved) {
             if (S + E <= 10.0 && (E <= 10.0 || D[7] < 0.0)) {
@@ -1304,7 +1376,6 @@ int main(int argc, char* argv[]) {
         
         print_game_over(K9 <= 0, quit == 1);
         
-        char aye[16];
         printf("\n%sTHE FEDERATION IS IN NEED OF A NEW STARSHIP COMMANDER\n", ANSI_COLOR_WHITE);
         printf("FOR A SIMILAR MISSION -- IF THERE IS A VOLUNTEER,\nLET HIM STEP FORWARD AND ENTER 'AYE': %s", ANSI_COLOR_RESET);
         
